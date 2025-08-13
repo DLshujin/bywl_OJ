@@ -1,0 +1,1 @@
+import{aw as c,ax as r}from"./index-CYsJ2gG-.js";const d=(...p)=>{const s=c().proxy.$props,t=Object.create(null);for(const e of p)if(typeof e=="string")t[e]=r(s,e,void 0,{eventName:`update:${e}`,passive:!0});else{const[o,n=o,a=`update:${o}`,u={}]=e;t[o]=r(s,n,void 0,{eventName:a,passive:!0,...u})}return t};export{d as _};

@@ -1,0 +1,57 @@
+# 依赖包和缓存
+node_modules/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+.cache/
+*.log
+yarn.lock
+pnpm-lock.yaml
+package-lock.json
+
+# 构建输出
+dist/
+build/*.js
+.build/
+*.tsbuildinfo
+coverage/
+.nyc_output/
+
+# 开发工具
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+.clinic/
+
+# 测试和覆盖率
+.coverage/
+globalConfig.json
+benchmark.json
+
+# 配置文件（敏感信息）
+.env
+.env.local
+.hydro/
+config.yaml
+config.json
+
+# 数据文件
+*.mmdb
+data/
+backup/
+
+# 其他
+.monokle/
+__*
+!__mocks__
+!.gitkeep
+*.local
+.pnp.*

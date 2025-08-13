@@ -1,0 +1,57 @@
+{
+  "exclude": [
+    "packages/ui-default/public",
+    "packages/ui-default/index.ts",
+    "packages/ui-default/backendlib/builder.ts",
+    "packages/ui-default/backendlib/misc.ts",
+    "packages/ui-default/backendlib/template.ts",
+    "packages/ui-default/backendlib/markdown.js",
+    "**/node_modules"
+  ],
+  "include": [
+    "plugins/**/public/**/*.ts",
+    "plugins/**/frontend/**/*.ts",
+    "packages/ui-default/**/*.ts",
+    "plugins/**/public/**/*.tsx",
+    "plugins/**/frontend/**/*.tsx",
+    "packages/ui-default/**/*.tsx",
+    "plugins/**/public/**/*.vue",
+    "plugins/**/frontend/**/*.vue",
+    "packages/ui-default/**/*.vue",
+    "plugins/**/public/**/*.json",
+    "plugins/**/frontend/**/*.json",
+    "packages/ui-default/**/*.json"
+  ],
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": [
+      "es2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "esModuleInterop": true,
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "sourceMap": false,
+    "composite": true,
+    "strictBindCallApply": true,
+    "resolveJsonModule": true,
+    "experimentalDecorators": true,
+    "incremental": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "outDir": "/root/Hydro/.cache/ts-out/ui",
+    "useDefineForClassFields": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "paths": {
+      "vj/*": [
+        "./packages/ui-default/*"
+      ]
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "exclude": [
+    "**/node_modules"
+  ],
+  "include": [
+    "packages/ui-next/src/**/*.ts",
+    "packages/ui-next/src/**/*.tsx",
+    "packages/ui-next/src/**/*.vue",
+    "packages/ui-next/src/**/*.json"
+  ],
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": [
+      "es2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "esModuleInterop": true,
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "sourceMap": false,
+    "composite": true,
+    "strictBindCallApply": true,
+    "resolveJsonModule": true,
+    "experimentalDecorators": true,
+    "incremental": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "outDir": "/root/Hydro/.cache/ts-out/ui-next",
+    "strict": true,
+    "noImplicitAny": false,
+    "useDefineForClassFields": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "paths": {
+      "@/*": [
+        "./packages/ui-next/src/*"
+      ],
+      "vj/*": [
+        "./packages/ui-default/*"
+      ]
+    }
+  }
+}

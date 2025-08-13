@@ -1,0 +1,1 @@
+import{au as m,p as r,f as t}from"./index-CYsJ2gG-.js";const f=m("user",()=>{const e=r(""),s=r(new Set),u=t(()=>Array.from(s.value)),o=t(()=>u.value.filter(a=>a!==e.value));function n(a){e.value&&s.value.add(e.value),e.value=a}return{setNewName:n,otherNames:o,savedName:e}});export{f as u};

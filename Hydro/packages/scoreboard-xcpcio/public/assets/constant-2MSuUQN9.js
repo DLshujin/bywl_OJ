@@ -1,0 +1,1 @@
+import{f as t}from"./index-CYsJ2gG-.js";const T="Board - XCPCIO",s="Rating - XCPCIO",r="Balloon - XCPCIO",I="Resolver - XCPCIO",O="Countdown - XCPCIO",_=t(()=>window?window.CDN_HOST:""),n=t(()=>window?window.DATA_HOST:""),C=t(()=>n.value.replace("/data/","/rating-data/")),d=t(()=>window?window.DATA_REGION:"");export{r as B,_ as C,n as D,C as R,T,d as a,O as b,s as c,I as d};
