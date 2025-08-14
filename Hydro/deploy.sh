@@ -430,16 +430,15 @@ start_services() {
     
     log_success "服务启动完成"
 
-    # 可选：启动 UI 开发服务器（仅用于前端热更新调试，不用于生产）
-    if [[ "${START_HYDRO_WEB:-0}" == "1" ]]; then
-        if [[ -f "$ROOT_DIR/packages/ui-default/build/index.js" ]]; then
-            log_info "启动 hydro-web（UI 开发服务器，默认端口 8044）..."
-            pm2 start "node $ROOT_DIR/packages/ui-default/build --dev" --name hydro-web --update-env || \
-                log_warning "hydro-web 启动失败，请检查 packages/ui-default/build 是否完整"
-            pm2 save
-        else
-            log_warning "未检测到 packages/ui-default/build，无法启动 hydro-web"
-        fi
+    # 启动 UI 开发服务器（按当前仓库 UI 源码运行，默认端口 8044）
+    if [[ -f "$ROOT_DIR/packages/ui-default/build/index.js" ]]; then
+        log_info "启动 hydro-web（UI 开发服务器，默认端口 8044）..."
+        pm2 start "node $ROOT_DIR/packages/ui-default/build --dev" --name hydro-web --update-env >/dev/null 2>&1 || \
+        pm2 restart hydro-web --update-env >/dev/null 2>&1 || \
+        log_warning "hydro-web 启动/重启失败，请检查 packages/ui-default/build 是否完整"
+        pm2 save
+    else
+        log_warning "未检测到 packages/ui-default/build，无法启动 hydro-web"
     fi
 }
 
