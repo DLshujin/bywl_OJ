@@ -291,9 +291,8 @@ EOF
         done <<< "$CANDIDATE_URLS"
 
         # 优先使用 aria2c 多线程下载，其次 curl 带超时与限速保护
-        # curl 限速参数要求纯数字（字节/秒），这里用 50000B/s，避免参数解析错误
-        CURL_OPTS=(--fail -L --retry 2 --retry-delay 2 --connect-timeout 8 --max-time 600 \
-                   --speed-limit 20000 --speed-time 60)
+        # 使用温和的超时/重试，不再按速度阈值判失败，避免慢网速下误判
+        CURL_OPTS=(--fail -L --retry 3 --retry-delay 3 --connect-timeout 10 --max-time 900)
         for URL in $(echo -e "$EXPANDED_URLS" | awk 'NF'); do
             log_info "尝试下载: $URL"
             if command -v aria2c >/dev/null 2>&1; then
