@@ -305,15 +305,25 @@ deploy_application() {
     log_info "构建 TypeScript..."
     yarn build
     
-    log_info "构建前端 UI..."
-    # 依次尝试：生产（完整）→ 生产（跳过 iconfont）→ 标准 → 开发
-    if ! yarn build:ui:production; then
-        log_warning "build:ui:production 失败，尝试 build:ui:production:webpack（跳过 iconfont）"
-        if ! yarn build:ui:production:webpack; then
-            log_warning "build:ui:production:webpack 失败，尝试 build:ui"
-            if ! yarn build:ui; then
-                log_warning "build:ui 失败，尝试开发构建 build:ui:dev"
-                yarn build:ui:dev
+    # 可通过环境变量强制跳过 UI 构建
+    if [[ "${SKIP_UI_BUILD:-0}" == "1" ]]; then
+        log_warning "已设置 SKIP_UI_BUILD=1，跳过前端 UI 构建"
+    else
+        # 若缺少 ui-default 的 build 脚本，则跳过构建，使用仓库内置静态资源
+        if [[ ! -d "packages/ui-default/build" && ! -f "packages/ui-default/build/index.js" ]]; then
+            log_warning "未检测到 packages/ui-default/build，跳过前端构建，使用仓库内置静态资源"
+        else
+            log_info "构建前端 UI..."
+            # 依次尝试：生产（完整）→ 生产（跳过 iconfont）→ 标准 → 开发
+            if ! yarn build:ui:production; then
+                log_warning "build:ui:production 失败，尝试 build:ui:production:webpack（跳过 iconfont）"
+                if ! yarn build:ui:production:webpack; then
+                    log_warning "build:ui:production:webpack 失败，尝试 build:ui"
+                    if ! yarn build:ui; then
+                        log_warning "build:ui 失败，尝试开发构建 build:ui:dev"
+                        yarn build:ui:dev || true
+                    fi
+                fi
             fi
         fi
     fi
