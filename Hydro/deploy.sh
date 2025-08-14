@@ -311,7 +311,20 @@ deploy_application() {
     else
         # 若缺少 ui-default 的 build 脚本，则跳过构建，使用仓库内置静态资源
         if [[ ! -d "packages/ui-default/build" && ! -f "packages/ui-default/build/index.js" ]]; then
-            log_warning "未检测到 packages/ui-default/build，跳过前端构建，使用仓库内置静态资源"
+            log_warning "未检测到 packages/ui-default/build，尝试从上游仓库补全构建脚本"
+            TMP_DIR=$(mktemp -d)
+            if git clone --depth 1 https://github.com/hydro-dev/Hydro.git "$TMP_DIR/hydro" >/dev/null 2>&1; then
+                mkdir -p packages/ui-default
+                cp -r "$TMP_DIR/hydro/packages/ui-default/build" packages/ui-default/ 2>/dev/null || true
+                rm -rf "$TMP_DIR"
+                if [[ -f "packages/ui-default/build/index.js" ]]; then
+                    log_success "已补全 packages/ui-default/build"
+                else
+                    log_warning "补全构建脚本失败，改为跳过前端构建，使用仓库内置静态资源"
+                fi
+            else
+                log_warning "克隆上游构建脚本失败，跳过前端构建，使用仓库内置静态资源"
+            fi
         else
             log_info "构建前端 UI..."
             # 依次尝试：生产（完整）→ 生产（跳过 iconfont）→ 标准 → 开发
