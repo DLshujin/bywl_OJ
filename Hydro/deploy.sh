@@ -262,7 +262,8 @@ deploy_application() {
     
     # 安装依赖
     log_info "安装项目依赖..."
-    export NODE_OPTIONS=${NODE_OPTIONS:-"--max-old-space-size=4096"}
+    # UI 构建可能内存占用较大，提高上限
+    export NODE_OPTIONS=${NODE_OPTIONS:-"--max-old-space-size=8192"}
     if ! yarn --version >/dev/null 2>&1; then
         # 某些环境下需要重新激活 corepack
         corepack enable || true
@@ -276,9 +277,16 @@ deploy_application() {
     yarn build
     
     log_info "构建前端 UI..."
+    # 依次尝试：生产（完整）→ 生产（跳过 iconfont）→ 标准 → 开发
     if ! yarn build:ui:production; then
-        log_warning "生产构建失败，回退到开发构建以继续部署"
-        yarn build:ui:dev || yarn build:ui
+        log_warning "build:ui:production 失败，尝试 build:ui:production:webpack（跳过 iconfont）"
+        if ! yarn build:ui:production:webpack; then
+            log_warning "build:ui:production:webpack 失败，尝试 build:ui"
+            if ! yarn build:ui; then
+                log_warning "build:ui 失败，尝试开发构建 build:ui:dev"
+                yarn build:ui:dev
+            fi
+        fi
     fi
     
     log_success "应用构建完成"
@@ -311,6 +319,7 @@ EOF
     chmod +x ~/.hydro/start_sandbox.sh
     
     # 评测服务配置
+    mkdir -p ~/.hydro
     cat > ~/.hydro/judge.yaml << 'EOF'
 hosts:
   localhost:
@@ -323,8 +332,9 @@ sandbox_host: http://127.0.0.1:5050
 EOF
     
     # 复制配置到 judge 用户
+    su - judge -c "mkdir -p ~/.hydro" || true
     cp ~/.hydro/judge.yaml /home/judge/.hydro/
-    chown judge:judge /home/judge/.hydro/judge.yaml
+    chown judge:judge /home/judge/.hydro/judge.yaml || true
     
     log_success "服务配置完成"
 }
@@ -336,20 +346,22 @@ start_services() {
     # 停止可能存在的服务
     pm2 delete all 2>/dev/null || true
     
+    # 安全设置：确保以项目根路径为工作目录启动，避免路径解析失败
+    ROOT_DIR="$SCRIPT_DIR"
     # 启动 Hydro 主服务
     log_info "启动 Hydro 主服务..."
-    pm2 start packages/hydrooj/bin/hydrooj.js --name hydro-main
+    pm2 start "$ROOT_DIR/packages/hydrooj/bin/hydrooj.js" --name hydro-main --update-env
     
     # 等待主服务启动
     sleep 10
     
     # 启动沙箱服务
     log_info "启动沙箱服务..."
-    pm2 start ~/.hydro/start_sandbox.sh --name hydro-sandbox
+    pm2 start ~/.hydro/start_sandbox.sh --name hydro-sandbox --update-env
     
     # 启动评测服务
     log_info "启动评测服务..."
-    pm2 start packages/hydrojudge/bin/hydrojudge.js --name hydro-judge
+    pm2 start "$ROOT_DIR/packages/hydrojudge/bin/hydrojudge.js" --name hydro-judge --update-env
     
     # 保存 PM2 配置并注册自启（systemd）
     pm2 save
