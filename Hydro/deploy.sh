@@ -237,34 +237,75 @@ install_redis() {
 install_judge() {
     log_info "第二阶段：安装评测环境..."
 
-    # 下载 go-judge（多候选 URL + 动态 API 获取）
+    # 允许跳过下载（离线或已自备）
+    if [[ "${SKIP_JUDGE:-0}" == "1" ]]; then
+        log_warning "已设置 SKIP_JUDGE=1，跳过下载/安装 Go-Judge"
+        return
+    fi
+
+    # 下载 go-judge（多候选 URL + 镜像 + 超时重试）
     if [[ ! -f /usr/bin/sandbox ]]; then
         log_info "下载 Go-Judge 沙箱..."
         DOWNLOAD_OK=0
-        URLS=""
-        if command -v jq >/dev/null 2>&1; then
-            URLS=$(curl -fsSL https://api.github.com/repos/criyle/go-judge/releases/latest \
+
+        # 如果指定了自定义 URL，优先使用
+        CANDIDATE_URLS=""
+        if [[ -n "${JUDGE_URL:-}" ]]; then
+            CANDIDATE_URLS+="$JUDGE_URL\n"
+        fi
+
+        # 通过 GitHub API 动态获取最新 release 资产
+        if command -v jq >/dev/null 2>&1 && [[ -z "${JUDGE_URL:-}" ]]; then
+            API_URLS=$(curl -fsSL --connect-timeout 5 --max-time 10 \
+                https://api.github.com/repos/criyle/go-judge/releases/latest \
                 | jq -r '.assets[].browser_download_url' 2>/dev/null \
                 | grep -E 'go-judge_.*linux_amd64' || true)
+            if [[ -n "$API_URLS" ]]; then
+                CANDIDATE_URLS+="$API_URLS\n"
+            fi
         fi
-        if [[ -z "$URLS" ]]; then
-            URLS=$(cat <<'EOF'
+
+        # 固定回退版本
+        FALLBACK_URLS=$(cat <<'EOF'
 https://github.com/criyle/go-judge/releases/download/v1.9.4/go-judge_1.9.4_linux_amd64v3
 https://github.com/criyle/go-judge/releases/download/v1.9.4/go-judge_1.9.4_linux_amd64v2
 https://github.com/criyle/go-judge/releases/download/v1.9.4/go-judge_1.9.4_linux_amd64
 https://github.com/criyle/go-judge/releases/download/v1.8.8/go-judge_1.8.8_linux_amd64
 EOF
 )
-        fi
-        for U in $URLS; do
-            log_info "尝试下载: $U"
-            if curl -fL "$U" -o /usr/bin/sandbox; then
+        CANDIDATE_URLS+="$FALLBACK_URLS\n"
+
+        # 为每个 URL 追加镜像加速候选（中国大陆网络优化）
+        MIRRORS=(
+            "https://mirror.ghproxy.com/"
+            "https://ghproxy.net/"
+        )
+
+        EXPANDED_URLS=""
+        while IFS= read -r U; do
+            [[ -z "$U" ]] && continue
+            EXPANDED_URLS+="$U\n"
+            for M in "${MIRRORS[@]}"; do
+                EXPANDED_URLS+="${M}${U}\n"
+            done
+        done <<< "$CANDIDATE_URLS"
+
+        # 优先使用 aria2c 多线程下载，其次 curl 带超时与限速保护
+        CURL_OPTS=(--fail -L --retry 2 --retry-delay 2 --connect-timeout 8 --max-time 300 \
+                   --speed-limit 50K --speed-time 30)
+        for URL in $(echo -e "$EXPANDED_URLS" | awk 'NF'); do
+            log_info "尝试下载: $URL"
+            if command -v aria2c >/dev/null 2>&1; then
+                aria2c -x 8 -s 8 -k 1M --timeout=8 --max-tries=3 -o sandbox "$URL" 2>/dev/null || true
+                if [[ -s sandbox ]]; then mv -f sandbox /usr/bin/sandbox; DOWNLOAD_OK=1; break; fi
+            fi
+            if curl "${CURL_OPTS[@]}" "$URL" -o /usr/bin/sandbox; then
                 DOWNLOAD_OK=1
                 break
             fi
         done
         if [[ "$DOWNLOAD_OK" != "1" ]]; then
-            log_error "Go-Judge 下载失败，请检查网络或手动安装"
+            log_error "Go-Judge 下载失败，请检查网络或设置 JUDGE_URL/SKIP_JUDGE"
         fi
         chmod +x /usr/bin/sandbox || true
         log_success "Go-Judge 下载完成"
