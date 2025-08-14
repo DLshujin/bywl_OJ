@@ -184,27 +184,36 @@ install_mongodb() {
         return
     fi
     
-    # 导入 MongoDB 公钥
-    curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
-        gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
+    # 导入 MongoDB 公钥（幂等且容错）
+    KEY_PATH=/usr/share/keyrings/mongodb-server-7.0.gpg
+    REPO_PATH=/etc/apt/sources.list.d/mongodb-org-7.0.list
+    if [[ ! -s "$KEY_PATH" ]]; then
+        rm -f "$KEY_PATH" 2>/dev/null || true
+        if ! curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --dearmor | tee "$KEY_PATH" >/dev/null; then
+            log_warning "无法下载 MongoDB GPG Key（可能是网络/DNS 问题），将继续尝试已存在的仓库或已安装的 MongoDB"
+        fi
+    fi
     
-    # 添加 MongoDB 源
-    echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] \
-https://repo.mongodb.org/apt/debian bookworm/mongodb-org/7.0 main" | \
-        tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+    # 添加 MongoDB 源（若未存在）
+    if [[ ! -s "$REPO_PATH" ]]; then
+        echo "deb [ arch=amd64,arm64 signed-by=$KEY_PATH ] https://repo.mongodb.org/apt/debian bookworm/mongodb-org/7.0 main" | tee "$REPO_PATH" >/dev/null || true
+    fi
     
-    # 安装 MongoDB
-    apt update && apt install -y mongodb-org
+    # 安装 MongoDB（容错重试）
+    apt update || true
+    if ! apt install -y mongodb-org; then
+        log_warning "通过官方源安装 MongoDB 失败，若网络受限请稍后重试或手动安装。将尝试启动已存在的 mongod（若已安装）。"
+    fi
     
     # 启动服务
-    systemctl start mongod
-    systemctl enable mongod
+    systemctl start mongod 2>/dev/null || true
+    systemctl enable mongod 2>/dev/null || true
     
     # 验证安装
     if systemctl is-active --quiet mongod; then
         log_success "MongoDB 安装完成并启动成功"
     else
-        log_error "MongoDB 启动失败"
+        log_error "MongoDB 启动失败（请检查网络或仓库配置，然后重试部署脚本）"
     fi
 }
 
