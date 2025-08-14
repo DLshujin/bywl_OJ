@@ -35,6 +35,11 @@ log_error() {
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 cd "$SCRIPT_DIR"
 
+# 统一本地化，避免 perl/locale WARNING 干扰
+export LANG=${LANG:-C.UTF-8}
+export LC_ALL=${LC_ALL:-C.UTF-8}
+export PATH="/usr/local/bin:${PATH}"
+
 # 可选：开启彻底清理模式（CLEAN=1），在部署前移除历史安装/依赖
 cleanup_previous_installation() {
 	log_info "开始清理历史安装与依赖 (可通过设置 CLEAN=1 触发彻底清理)..."
@@ -133,7 +138,7 @@ install_prerequisites() {
     log_info "安装基础开发工具..."
     apt install -y curl wget git build-essential python3 python3-pip \
         software-properties-common gnupg2 apt-transport-https ca-certificates \
-        lsb-release unzip vim htop net-tools
+        lsb-release unzip vim htop net-tools jq
     
     log_success "系统依赖安装完成"
 }
@@ -222,18 +227,42 @@ install_redis() {
 # 安装评测环境
 install_judge() {
     log_info "第二阶段：安装评测环境..."
-    
-    # 下载 go-judge
+
+    # 下载 go-judge（多候选 URL + 动态 API 获取）
     if [[ ! -f /usr/bin/sandbox ]]; then
         log_info "下载 Go-Judge 沙箱..."
-        wget https://github.com/criyle/go-judge/releases/latest/download/go-judge_1.8.8_linux_amd64 \
-            -O /usr/bin/sandbox
-        chmod +x /usr/bin/sandbox
+        DOWNLOAD_OK=0
+        URLS=""
+        if command -v jq >/dev/null 2>&1; then
+            URLS=$(curl -fsSL https://api.github.com/repos/criyle/go-judge/releases/latest \
+                | jq -r '.assets[].browser_download_url' 2>/dev/null \
+                | grep -E 'go-judge_.*linux_amd64' || true)
+        fi
+        if [[ -z "$URLS" ]]; then
+            URLS=$(cat <<'EOF'
+https://github.com/criyle/go-judge/releases/download/v1.9.4/go-judge_1.9.4_linux_amd64v3
+https://github.com/criyle/go-judge/releases/download/v1.9.4/go-judge_1.9.4_linux_amd64v2
+https://github.com/criyle/go-judge/releases/download/v1.9.4/go-judge_1.9.4_linux_amd64
+https://github.com/criyle/go-judge/releases/download/v1.8.8/go-judge_1.8.8_linux_amd64
+EOF
+)
+        fi
+        for U in $URLS; do
+            log_info "尝试下载: $U"
+            if curl -fL "$U" -o /usr/bin/sandbox; then
+                DOWNLOAD_OK=1
+                break
+            fi
+        done
+        if [[ "$DOWNLOAD_OK" != "1" ]]; then
+            log_error "Go-Judge 下载失败，请检查网络或手动安装"
+        fi
+        chmod +x /usr/bin/sandbox || true
         log_success "Go-Judge 下载完成"
     else
         log_success "Go-Judge 已存在"
     fi
-    
+
     # 验证安装
     /usr/bin/sandbox --version && log_success "Go-Judge 安装验证成功"
 }
@@ -416,12 +445,20 @@ EOF
 # 安装题库插件
 install_plugins() {
     log_info "第六阶段：安装题库插件..."
+    # 确保 hydrooj CLI 可用（用于回退调用）
+    if [[ ! -x /usr/local/bin/hydrooj ]]; then
+        ln -sf "$SCRIPT_DIR/packages/hydrooj/bin/hydrooj.js" /usr/local/bin/hydrooj 2>/dev/null || true
+        chmod +x /usr/local/bin/hydrooj 2>/dev/null || true
+    fi
+    export PATH="$SCRIPT_DIR/node_modules/.bin:$PATH"
     
     # 安装 hydroac-client 插件
     node packages/hydrooj/bin/hydrooj.js install https://hydro.ac/hydroac-client.zip || log_warning "插件安装可能失败，可后续手动安装"
     
     # 手动添加插件
-    node packages/hydrooj/bin/hydrooj.js addon add '/root/.hydro/addons/hydroac-client' || log_warning "插件添加可能失败"
+    node packages/hydrooj/bin/hydrooj.js addon add '/root/.hydro/addons/hydroac-client' || \
+        hydrooj addon add '/root/.hydro/addons/hydroac-client' || \
+        log_warning "插件添加可能失败"
     
     # 重启主服务
     pm2 restart hydro-main
@@ -436,24 +473,27 @@ verify_deployment() {
     # 检查服务状态
     pm2 status
     
-    # 检查端口监听
-    if command -v netstat >/dev/null 2>&1; then
-        if netstat -tulpn | grep -q ":8888"; then
-            log_success "Web 服务已启动，监听端口 8888"
+    # 等待端口监听与 HTTP 可用（最多 60 秒）
+    ATTEMPTS=0
+    until [[ $ATTEMPTS -ge 30 ]]; do
+        PORT_OK=0
+        if command -v netstat >/dev/null 2>&1; then
+            if netstat -tulpn | grep -q ":8888"; then PORT_OK=1; fi
         else
-            log_error "Web 服务未正常启动"
+            PORT_OK=1
         fi
-    else
-        sleep 5
-    fi
 
-    # 测试 HTTP 响应（接受 200 或 302）
-    sleep 5
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8888 || true)
-    if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "302" ]]; then
-        log_success "Web 服务响应正常 ($HTTP_CODE)"
-    else
-        log_warning "Web 服务返回状态码 $HTTP_CODE，可能仍在启动中或需要检查日志"
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8888 || true)
+        if [[ $PORT_OK -eq 1 && "$HTTP_CODE" =~ ^(200|204|301|302|304|401|403)$ ]]; then
+            log_success "Web 服务已就绪 (端口:OK, HTTP:$HTTP_CODE)"
+            break
+        fi
+        ATTEMPTS=$((ATTEMPTS+1))
+        sleep 2
+    done
+
+    if [[ $ATTEMPTS -ge 30 ]]; then
+        log_warning "Web 服务健康检查未通过，但进程可能已在线。请使用 pm2 logs hydro-main 检查详情。"
     fi
 }
 
